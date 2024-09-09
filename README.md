@@ -4,11 +4,12 @@ YOLOv1 Implementation in Pytorch
 This repository implements Yolo, specifically [Yolov1](https://arxiv.org/pdf/1506.02640) with training, inference and mAP evaluation in PyTorch.
 The repo has code to train Yolov1 on voc dataset. Specifically I trained on trainval images of VOC 2007+2012 dataset.
 For testing, I use VOC2007 test set.
-During training as well as testing, I ignore the difficult examples hence the mAP is for when the difficult examples are excluded.
-
 
 ## YOLOv1 Explanation and Implementation Video
 
+<a href="https://youtu.be/TPD9AfY7AHo">
+   <img alt="YOLOv1 Explanation and Implementation" src="https://github.com/user-attachments/assets/ccc0935b-b314-4841-9dc2-c594462b9062" width="300">
+</a>
 
 ## Sample Output by training YOLOv1 on VOC 2007+2012 dataset 
 Prediction(Top) | Class Grid Map(Bottom)
