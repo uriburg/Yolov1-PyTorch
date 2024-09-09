@@ -13,6 +13,18 @@ During training as well as testing, I ignore the difficult examples hence the mA
 
 ## Sample Output by training YOLOv1 on VOC 2007+2012 dataset 
 Prediction(Top) | Class Grid Map(Bottom)
+</br>
+<img src="https://github.com/user-attachments/assets/b5201466-3025-426e-bf08-6213c0bc69ea" width="225">
+<img src="https://github.com/user-attachments/assets/3f41051a-dcbc-462f-99e1-79feffedf759" width="225">
+<img src="https://github.com/user-attachments/assets/6a27eb4f-635e-4402-a3b3-ae936729cb75" width="225">
+<img src="https://github.com/user-attachments/assets/f772275f-73f7-4d1a-a0d6-d60374d4baba" width="225">
+</br>
+
+<img src="https://github.com/user-attachments/assets/049aef7d-501b-4474-b5e3-ae355d4e3829" width="225">
+<img src="https://github.com/user-attachments/assets/3181f2a4-f2b5-4ea8-a666-1b5c6c600c23" width="225">
+<img src="https://github.com/user-attachments/assets/2b2f4ba1-c0ee-4097-9e05-75b9533a9b46" width="225">
+<img src="https://github.com/user-attachments/assets/f47affa5-9cc0-4184-902a-c977f720078c" width="225">
+</br>
 
 ## Data preparation
 For setting up the VOC 2007+2012 dataset:
