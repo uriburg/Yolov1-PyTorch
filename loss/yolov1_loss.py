@@ -41,17 +41,22 @@ class YOLOV1Loss(nn.Module):
         self.lambda_coord = 5
         self.lambda_noobj = 0.5
 
-    def forward(self, preds, targets):
+    def forward(self, preds, targets, use_sigmoid=False):
         r"""
         Main method of loss computation
         :param preds: (Batch, S*S*(5B+C)) tensor
         :param targets: (Batch, S, S, (5B+C)) tensor.
             Target element for each cell has been duplicated 5B times(done in VOCDataset)
+        :param use_sigmoid: Whether to use sigmoid activation for box predicitons or not
         """
         batch_size = preds.size(0)
 
         # preds -> (Batch, S, S, 5B+C)
         preds = preds.reshape(batch_size, self.S, self.S, 5*self.B + self.C)
+
+        # Generally sigmoid leads to quicker convergence
+        if use_sigmoid:
+            preds[..., :5 * self.B] = torch.nn.functional.sigmoid(preds[..., :5 * self.B])
 
         # Shifts for all grid cell locations.
         # Will use these for converting x_center_offset/y_center_offset

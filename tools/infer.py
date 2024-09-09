@@ -8,6 +8,7 @@ from models.yolo import YOLOV1
 from dataset.voc import VOCDataset
 from utils.visualization_utils import *
 from torch.utils.data.dataloader import DataLoader
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -31,7 +32,7 @@ def get_iou(det, gt):
     return iou
 
 
-def compute_map(det_boxes, gt_boxes, iou_threshold=0.5, method='area'):
+def compute_map(det_boxes, gt_boxes, iou_threshold=0.5, method='area', difficult=None):
     # det_boxes = [
     #   {
     #       'person' : [[x1, y1, x2, y2, score], ...],
@@ -82,6 +83,8 @@ def compute_map(det_boxes, gt_boxes, iou_threshold=0.5, method='area'):
         gt_matched = [[False for _ in im_gts[label]] for im_gts in gt_boxes]
         # Number of gt boxes for this class for recall calculation
         num_gts = sum([len(im_gts[label]) for im_gts in gt_boxes])
+        num_difficults = sum([sum(difficults_label[label]) for difficults_label in difficult])
+
         tp = [0] * len(cls_dets)
         fp = [0] * len(cls_dets)
 
@@ -89,6 +92,8 @@ def compute_map(det_boxes, gt_boxes, iou_threshold=0.5, method='area'):
         for det_idx, (im_idx, det_pred) in enumerate(cls_dets):
             # Get gt boxes for this image and this label
             im_gts = gt_boxes[im_idx][label]
+            im_gt_difficults = difficult[im_idx][label]
+
             max_iou_found = -1
             max_iou_gt_idx = -1
 
@@ -100,12 +105,13 @@ def compute_map(det_boxes, gt_boxes, iou_threshold=0.5, method='area'):
                     max_iou_gt_idx = gt_box_idx
             # TP only if iou >= threshold and this gt has not yet been matched
             if max_iou_found >= iou_threshold:
-                if not gt_matched[im_idx][max_iou_gt_idx]:
-                    # If tp then we set this gt box as matched
-                    gt_matched[im_idx][max_iou_gt_idx] = True
-                    tp[det_idx] = 1
-                else:
-                    fp[det_idx] = 1
+                if not im_gt_difficults[max_iou_gt_idx]:
+                    if not gt_matched[im_idx][max_iou_gt_idx]:
+                        # If tp then we set this gt box as matched
+                        gt_matched[im_idx][max_iou_gt_idx] = True
+                        tp[det_idx] = 1
+                    else:
+                        fp[det_idx] = 1
             else:
                 fp[det_idx] = 1
 
@@ -114,7 +120,8 @@ def compute_map(det_boxes, gt_boxes, iou_threshold=0.5, method='area'):
         fp = np.cumsum(fp)
 
         eps = np.finfo(np.float32).eps
-        recalls = tp / np.maximum(num_gts, eps)
+        # recalls = tp / np.maximum(num_gts, eps)
+        recalls = tp / np.maximum(num_gts - num_difficults, eps)
         precisions = tp / np.maximum((tp + fp), eps)
 
         if method == 'area':
@@ -166,13 +173,6 @@ def load_model_and_dataset(args):
     model_config = config['model_params']
     train_config = config['train_params']
 
-    seed = train_config['seed']
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-    if device == 'cuda':
-        torch.cuda.manual_seed_all(seed)
-
     voc = VOCDataset('test',
                      im_sets=dataset_config['test_im_sets'],
                      im_size=dataset_config['im_size'],
@@ -193,15 +193,17 @@ def load_model_and_dataset(args):
     yolo_model.load_state_dict(torch.load(os.path.join(train_config['task_name'],
                                                        train_config['ckpt_name']),
                                           map_location=device))
-    return yolo_model, voc, test_dataset
+    return yolo_model, voc, test_dataset, config
 
 
-def convert_yolo_pred_x1y1x2y2(yolo_pred, S, B, C):
+def convert_yolo_pred_x1y1x2y2(yolo_pred, S, B, C, use_sigmoid=False):
     r"""
     Method converts yolo predictions to
     x1y1x2y2 format
     """
     out = yolo_pred.reshape((S, S, 5 * B + C))
+    if use_sigmoid:
+        out[..., :5 * B] = torch.nn.functional.sigmoid(out[..., :5 * B])
     out = torch.clamp(out, min=0., max=1.)
     class_score, class_idx = torch.max(out[..., 5 * B:], dim=-1)
 
@@ -239,9 +241,9 @@ def infer(args):
     if not os.path.exists('samples'):
         os.mkdir('samples')
 
-    yolo_model, voc, test_dataset = load_model_and_dataset(args)
-    conf_threshold = 0.1
-    nms_threshold = 0.5
+    yolo_model, voc, test_dataset, config = load_model_and_dataset(args)
+    conf_threshold = config['train_params']['infer_conf_threshold']
+    nms_threshold = config['train_params']['nms_threshold']
 
     num_samples = 5
 
@@ -253,7 +255,8 @@ def infer(args):
         boxes, scores, labels = convert_yolo_pred_x1y1x2y2(out,
                                                            S=yolo_model.S,
                                                            B=yolo_model.B,
-                                                           C=yolo_model.C)
+                                                           C=yolo_model.C,
+                                                           use_sigmoid=config['model_params']['use_sigmoid'])
 
         # Confidence Score Thresholding
         keep = torch.where(scores > conf_threshold)[0]
@@ -280,6 +283,8 @@ def infer(args):
 
         if not os.path.exists('samples/preds'):
             os.mkdir('samples/preds')
+        if not os.path.exists('samples/grid_cls'):
+            os.mkdir('samples/grid_cls')
 
         im = cv2.imread(fname)
         h, w = im.shape[:2]
@@ -294,25 +299,48 @@ def infer(args):
                             scores=scores.detach().cpu().numpy())
 
         cv2.imwrite('samples/preds/{}_pred.jpeg'.format(i), out_img)
+
+        # Below lines of code are only for drawing class prob map
+        im = cv2.resize(im, (yolo_model.im_size, yolo_model.im_size))
+
+        # Draw a SxS grid on image
+        grid_im = draw_grid(im, (yolo_model.S, yolo_model.S))
+
+        out = out.reshape((yolo_model.S, yolo_model.S, 5 * yolo_model.B + yolo_model.C))
+        cls_val, cls_idx = torch.max(out[..., 5 * yolo_model.B:], dim=-1)
+
+        # Draw colored squares for probability mappings on image
+        rect_im = draw_cls_grid(im, cls_idx, (yolo_model.S, yolo_model.S))
+        # Draw grid again on top of this image
+        rect_im = draw_grid(rect_im, (yolo_model.S, yolo_model.S))
+
+        # Overlay image with grid and cls mappings with grid on top of each other
+        res = cv2.addWeighted(rect_im, 0.5, grid_im, 0.5, 1.0)
+        # Write class labels on grid on this image
+        res = draw_cls_text(res, cls_idx, voc.idx2label, (yolo_model.S, yolo_model.S))
+        cv2.imwrite('samples/grid_cls/{}_grid_map.jpeg'.format(i), res)
     print('Done Detecting...')
 
 
 def evaluate_map(args):
-    yolo_model, voc, test_dataset = load_model_and_dataset(args)
-    conf_threshold = 0.001
-    nms_threshold = 0.5
+    yolo_model, voc, test_dataset, config = load_model_and_dataset(args)
+    conf_threshold = config['train_params']['eval_conf_threshold']
+    nms_threshold = config['train_params']['nms_threshold']
 
     gts = []
     preds = []
+    difficults = []
     for im_tensor, target, fname in tqdm(test_dataset):
         im_tensor = im_tensor.float().to(device)
         target_bboxes = target['bboxes'].float().to(device)[0]
         target_labels = target['labels'].long().to(device)[0]
+        difficult = target['difficult'].long().to(device)[0]
         out = yolo_model(im_tensor)
         boxes, scores, labels = convert_yolo_pred_x1y1x2y2(out,
                                                            S=yolo_model.S,
                                                            B=yolo_model.B,
-                                                           C=yolo_model.C)
+                                                           C=yolo_model.C,
+                                                           use_sigmoid=config['model_params']['use_sigmoid'])
 
         # Confidence Score Thresholding
         keep = torch.where(scores > conf_threshold)[0]
@@ -333,11 +361,15 @@ def evaluate_map(args):
         boxes = boxes[keep]
         scores = scores[keep]
         labels = labels[keep]
+
         pred_boxes = {}
         gt_boxes = {}
+        difficult_boxes = {}
+
         for label_name in voc.label2idx:
             pred_boxes[label_name] = []
             gt_boxes[label_name] = []
+            difficult_boxes[label_name] = []
 
         for idx, box in enumerate(boxes):
             x1, y1, x2, y2 = box.detach().cpu().numpy()
@@ -350,10 +382,12 @@ def evaluate_map(args):
             label = target_labels[idx].detach().cpu().item()
             label_name = voc.idx2label[label]
             gt_boxes[label_name].append([x1, y1, x2, y2])
+            difficult_boxes[label_name].append(difficult[idx].detach().cpu().item())
 
         gts.append(gt_boxes)
         preds.append(pred_boxes)
-    mean_ap, all_aps = compute_map(preds, gts, method='area')
+        difficults.append(difficult_boxes)
+    mean_ap, all_aps = compute_map(preds, gts, method='area', difficult=difficults)
     print('Class Wise Average Precisions')
     for idx in range(len(voc.idx2label)):
         print('AP for class {} = {:.4f}'.format(voc.idx2label[idx],
@@ -365,7 +399,19 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Arguments for yolov1 inference')
     parser.add_argument('--config', dest='config_path',
                         default='config/voc.yaml', type=str)
+    parser.add_argument('--evaluate', dest='evaluate',
+                        default=False, type=bool)
+    parser.add_argument('--infer_samples', dest='infer_samples',
+                        default=True, type=bool)
     args = parser.parse_args()
 
     with torch.no_grad():
-        infer(args)
+        if args.infer_samples:
+            infer(args)
+        else:
+            print('Not Inferring for samples as `infer_samples` argument is False')
+
+        if args.evaluate:
+            evaluate_map(args)
+        else:
+            print('Not Evaluating as `evaluate` argument is False')

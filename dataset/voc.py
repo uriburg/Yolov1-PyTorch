@@ -60,6 +60,7 @@ def load_images_and_anns(im_sets, label2idx, ann_fname, split):
                 det['label'] = label
                 det['bbox'] = bbox
                 det['difficult'] = difficult
+                # At test time eval does the job of ignoring difficult
                 detections.append(det)
 
             im_info['detections'] = detections
@@ -85,7 +86,7 @@ class VOCDataset(Dataset):
             'train': albu.Compose([
                 albu.HorizontalFlip(p=0.5),
                 albu.Affine(
-                    scale=(0.5, 1.5),
+                    scale=(0.8, 1.2),
                     translate_percent=(-0.2, 0.2),
                     always_apply=True
                 ),
@@ -132,6 +133,7 @@ class VOCDataset(Dataset):
         # Get annotations for this image
         bboxes = [detection['bbox'] for detection in im_info['detections']]
         labels = [detection['label'] for detection in im_info['detections']]
+        difficult = [detection['difficult'] for detection in im_info['detections']]
 
         # Transform Image and ann according to augmentations list
         transformed_info = self.transforms[self.split](image=im,
@@ -140,6 +142,7 @@ class VOCDataset(Dataset):
         im = transformed_info['image']
         bboxes = torch.as_tensor(transformed_info['bboxes'])
         labels = torch.as_tensor(transformed_info['labels'])
+        difficult = torch.as_tensor(difficult)
 
         # Convert image to tensor and normalize
         im_tensor = torch.from_numpy(im / 255.).permute((2, 0, 1)).float()
@@ -194,7 +197,7 @@ class VOCDataset(Dataset):
                 cls_target = torch.zeros((self.C,))
                 cls_target[label] = 1.
                 yolo_targets[box_j[idx], box_i[idx], 5 * self.B:] = cls_target
-        # For training we use yolo_targets(xoffset, yoffset, sqrt(w), sqrt(h))
+        # For training, we use yolo_targets(xoffset, yoffset, sqrt(w), sqrt(h))
         # For evaluation we use bboxes_tensor (x1, y1, x2, y2)
         # Below we normalize bboxes tensor to be between 0-1
         # as thats what evaluation script expects so (x1/w, y1/h, x2/w, y2/h)
@@ -203,6 +206,7 @@ class VOCDataset(Dataset):
         targets = {
             'bboxes': bboxes_tensor,
             'labels': labels_tensor,
-            'yolo_targets': yolo_targets
+            'yolo_targets': yolo_targets,
+            'difficult': difficult,
         }
         return im_tensor, targets, im_info['filename']

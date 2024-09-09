@@ -21,13 +21,15 @@ class YOLOV1(nn.Module):
         self.im_channels = model_config['im_channels']
         self.backbone_channels = model_config['backbone_channels']
         self.yolo_conv_channels = model_config['yolo_conv_channels']
-        self.backbone_spatial_size = model_config['backbone_spatial_size']
+        self.conv_spatial_size = model_config['conv_spatial_size']
         self.leaky_relu_slope = model_config['leaky_relu_slope']
         self.yolo_fc_hidden_dim = model_config['fc_dim']
         self.yolo_fc_dropout_prob = model_config['fc_dropout']
+        self.use_conv = model_config['use_conv']
         self.S = model_config['S']
         self.B = model_config['B']
         self.C = num_classes
+
         backbone = torchvision.models.resnet34(
             weights=torchvision.models.ResNet34_Weights.IMAGENET1K_V1
         )
@@ -81,21 +83,29 @@ class YOLOV1(nn.Module):
             )
 
         #######################
-        # Detection FC Layers #
+        # Detection Layers #
         #######################
-        self.fc_yolo_layers = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(self.backbone_spatial_size * self.backbone_spatial_size *
-                      self.yolo_conv_channels,
-                      self.yolo_fc_hidden_dim),
-            nn.LeakyReLU(self.leaky_relu_slope),
-            nn.Dropout(self.yolo_fc_dropout_prob),
-            nn.Linear(self.yolo_fc_hidden_dim,
-                      self.S * self.S * (5 * self.B + self.C)),
-        )
+        if self.use_conv:
+            self.fc_yolo_layers = nn.Sequential(
+                nn.Conv2d(self.yolo_conv_channels, 5 * self.B + self.C, 1),
+            )
+        else:
+            self.fc_yolo_layers = nn.Sequential(
+                nn.Flatten(),
+                nn.Linear(self.conv_spatial_size * self.conv_spatial_size *
+                          self.yolo_conv_channels,
+                          self.yolo_fc_hidden_dim),
+                nn.LeakyReLU(self.leaky_relu_slope),
+                nn.Dropout(self.yolo_fc_dropout_prob),
+                nn.Linear(self.yolo_fc_hidden_dim,
+                          self.S * self.S * (5 * self.B + self.C)),
+            )
 
     def forward(self, x):
         out = self.features(x)
         out = self.conv_yolo_layers(out)
         out = self.fc_yolo_layers(out)
+        if self.use_conv:
+            # Reshape conv output to Batch x S x S x (5B+C)
+            out = out.permute(0, 2, 3, 1)
         return out

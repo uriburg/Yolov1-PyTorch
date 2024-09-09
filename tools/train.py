@@ -85,14 +85,14 @@ def train(args):
                 for target in targets], dim=0)
             im = torch.cat([im.unsqueeze(0).float().to(device) for im in ims], dim=0)
             yolo_preds = yolo_model(im)
-            loss = criterion(yolo_preds, yolo_targets)
+            loss = criterion(yolo_preds, yolo_targets, use_sigmoid=model_config['use_sigmoid'])
             loss = loss / acc_steps
             loss.backward()
             losses.append(loss.item())
-            if (idx+1) % acc_steps == 0:
+            if (idx + 1) % acc_steps == 0:
                 optimizer.step()
                 optimizer.zero_grad()
-            if idx % train_config['log_steps'] == 0:
+            if steps % train_config['log_steps'] == 0:
                 print('Loss : {:.4f}'.format(np.mean(losses)))
             if torch.isnan(loss):
                 print('Loss is becoming nan. Exiting')
