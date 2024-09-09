@@ -54,13 +54,7 @@ For setting up the VOC 2007+2012 dataset:
 * Modify dataset file `dataset/voc.py` to load images and annotations accordingly specifically `load_images_and_anns` method
 * Update the class list of your dataset in the dataset file.
 * Dataset class should return the following:
-* targets = {
-            'bboxes': bboxes_tensor,
-            'labels': labels_tensor,
-            'yolo_targets': yolo_targets,
-            'difficult': difficult,
-        }
-  ```
+    ```
   im_tensor(C x H x W) , 
   target{
         'yolo_targets' : S x S x (5B+C) (this is the target used by yolo loss)
@@ -68,7 +62,7 @@ For setting up the VOC 2007+2012 dataset:
         'labels': Number of Gts,
         }
   file_path(just used for debugging)
-  ```
+  ```g
 
 ## Differences from Yolov1 paper
 Below are the differences from the paper
