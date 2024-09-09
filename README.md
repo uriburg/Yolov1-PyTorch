@@ -8,7 +8,10 @@ During training as well as testing, I ignore the difficult examples hence the mA
 
 
 ## YOLOv1 Explanation and Implementation Video
-
+<a href="https://youtu.be/TPD9AfY7AHo">
+   <img alt="YOLOv1 Explanation and Implementation" src="https://github.com/user-attachments/assets/ccc0935b-b314-4841-9dc2-c594462b9062"
+   width="300">
+</a>
 
 
 ## Sample Output by training YOLOv1 on VOC 2007+2012 dataset 
