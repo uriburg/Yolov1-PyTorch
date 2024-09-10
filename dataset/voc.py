@@ -46,6 +46,8 @@ def load_images_and_anns(im_sets, label2idx, ann_fname, split):
             im_info['height'] = height
             detections = []
 
+            # We will keep an image only if there are valid rois in it
+            any_valid_object = False
             for obj in ann_info.findall('object'):
                 det = {}
                 label = label2idx[obj.find('name').text]
@@ -60,11 +62,16 @@ def load_images_and_anns(im_sets, label2idx, ann_fname, split):
                 det['label'] = label
                 det['bbox'] = bbox
                 det['difficult'] = difficult
+                # Ignore difficult rois during training
                 # At test time eval does the job of ignoring difficult
-                detections.append(det)
+                # examples. 
+                if difficult == 0 or split == 'test':
+                    detections.append(det)
+                    any_valid_object = True
 
-            im_info['detections'] = detections
-            im_infos.append(im_info)
+            if any_valid_object:
+                im_info['detections'] = detections
+                im_infos.append(im_info)
     print('Total {} images found'.format(len(im_infos)))
     return im_infos
 
