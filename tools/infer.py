@@ -178,12 +178,11 @@ def load_model_and_dataset(args):
                      im_size=dataset_config['im_size'],
                      S=model_config['S'],
                      B=model_config['B'],
-                     C=dataset_config['num_classes'])
+                     C=dataset_config['num_classes'], labels=dataset_config['labels'])
     test_dataset = DataLoader(voc, batch_size=1, shuffle=False)
 
     yolo_model = YOLOV1(im_size=dataset_config['im_size'],
-                        num_classes=dataset_config['num_classes'],
-                        model_config=model_config)
+                        num_classes=dataset_config['num_classes'], S=model_config['S'], B=model_config['B'])
     yolo_model.eval()
     yolo_model.to(device)
     assert os.path.exists(os.path.join(train_config['task_name'],
@@ -398,7 +397,7 @@ def evaluate_map(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Arguments for yolov1 inference')
     parser.add_argument('--config', dest='config_path',
-                        default='config/voc.yaml', type=str)
+                        default='config\\voc.yaml', type=str)
     parser.add_argument('--evaluate', dest='evaluate',
                         default=False, type=bool)
     parser.add_argument('--infer_samples', dest='infer_samples',

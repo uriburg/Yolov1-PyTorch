@@ -43,8 +43,10 @@ def train(args):
     if device == 'cuda':
         torch.cuda.manual_seed_all(seed)
 
-    voc = VOCDataset('train',
-                     im_sets=dataset_config['train_im_sets'])
+    voc = VOCDataset(split='train', im_sets=dataset_config['train_im_sets'], labels=dataset_config['labels'],
+                     im_size=dataset_config['im_size'], S=model_config['S'], B=model_config['B'],
+                     C=dataset_config['num_classes'])
+
     train_dataset = DataLoader(voc,
                                batch_size=train_config['batch_size'],
                                shuffle=True,
@@ -52,7 +54,7 @@ def train(args):
 
     yolo_model = YOLOV1(im_size=dataset_config['im_size'],
                         num_classes=dataset_config['num_classes'],
-                        model_config=model_config)
+                        B=model_config['B'], S=model_config['S'])
     yolo_model.train()
     yolo_model.to(device)
     if os.path.exists(os.path.join(train_config['task_name'],
@@ -72,7 +74,7 @@ def train(args):
                                 momentum=0.9)
 
     scheduler = MultiStepLR(optimizer, milestones=train_config['lr_steps'], gamma=0.5)
-    criterion = YOLOV1Loss()
+    criterion = YOLOV1Loss(C=dataset_config['num_classes'], B=model_config['B'], S=model_config['S'])
     acc_steps = train_config['acc_steps']
     num_epochs = train_config['num_epochs']
     steps = 0
@@ -110,6 +112,6 @@ def train(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Arguments for yolov1 training')
     parser.add_argument('--config', dest='config_path',
-                        default='config/voc.yaml', type=str)
+                        default='config\\voc.yaml', type=str)
     args = parser.parse_args()
     train(args)

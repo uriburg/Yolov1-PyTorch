@@ -49,6 +49,8 @@ def load_images_and_anns(im_sets, label2idx, ann_fname, split):
             # We will keep an image only if there are valid rois in it
             any_valid_object = False
             for obj in ann_info.findall('object'):
+                if obj.find('name').text not in label2idx:
+                    continue
                 det = {}
                 label = label2idx[obj.find('name').text]
                 difficult = int(obj.find('difficult').text)
@@ -77,7 +79,7 @@ def load_images_and_anns(im_sets, label2idx, ann_fname, split):
 
 
 class VOCDataset(Dataset):
-    def __init__(self, split, im_sets, im_size=448, S=7, B=2, C=20):
+    def __init__(self, split, im_sets, labels, im_size=448, S=7, B=2, C=20):
         self.split = split
         # Imagesets for this dataset instance (VOC2007/VOC2007+VOC2012/VOC2007-test)
         self.im_sets = im_sets
@@ -115,12 +117,7 @@ class VOCDataset(Dataset):
                                             label_fields=['labels']))
         }
 
-        classes = [
-            'person', 'bird', 'cat', 'cow', 'dog', 'horse', 'sheep',
-            'aeroplane', 'bicycle', 'boat', 'bus', 'car', 'motorbike', 'train',
-            'bottle', 'chair', 'diningtable', 'pottedplant', 'sofa', 'tvmonitor'
-        ]
-        classes = sorted(classes)
+        classes = sorted(labels)
         self.label2idx = {classes[idx]: idx for idx in range(len(classes))}
         self.idx2label = {idx: classes[idx] for idx in range(len(classes))}
         print(self.idx2label)
