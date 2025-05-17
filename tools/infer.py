@@ -178,11 +178,12 @@ def load_model_and_dataset(args):
                      im_size=dataset_config['im_size'],
                      S=model_config['S'],
                      B=model_config['B'],
-                     C=dataset_config['num_classes'], labels=dataset_config['labels'])
+                     C=dataset_config['num_classes'], labels=dataset_config['labels'], im_channels=model_config['im_channels'])
     test_dataset = DataLoader(voc, batch_size=1, shuffle=False)
 
-    yolo_model = YOLOV1(im_size=dataset_config['im_size'],
-                        num_classes=dataset_config['num_classes'], S=model_config['S'], B=model_config['B'])
+    yolo_model = YOLOV1(im_size=dataset_config['im_size'], num_classes=dataset_config['num_classes'],
+                        S=model_config['S'], B=model_config['B'], shrink_network=model_config['shrink'],
+                        use_conv=model_config['use_conv'], im_channels=model_config['im_channels'])
     yolo_model.eval()
     yolo_model.to(device)
     assert os.path.exists(os.path.join(train_config['task_name'],

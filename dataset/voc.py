@@ -79,7 +79,7 @@ def load_images_and_anns(im_sets, label2idx, ann_fname, split):
 
 
 class VOCDataset(Dataset):
-    def __init__(self, split, im_sets, labels, im_size=448, S=7, B=2, C=20):
+    def __init__(self, split, im_sets, labels, im_size=448, S=7, B=2, C=20, im_channels=3):
         self.split = split
         # Imagesets for this dataset instance (VOC2007/VOC2007+VOC2012/VOC2007-test)
         self.im_sets = im_sets
@@ -89,7 +89,7 @@ class VOCDataset(Dataset):
         self.S = S
         self.B = B
         self.C = C
-
+        self.im_channels = im_channels
         # Train and test transformations
         self.transforms = {
             'train': albu.Compose([
@@ -132,8 +132,10 @@ class VOCDataset(Dataset):
     def __getitem__(self, index):
         im_info = self.images_info[index]
         im = cv2.imread(im_info['filename'])
-        im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-
+        if self.im_channels == 1:
+            im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        else:
+            im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
         # Get annotations for this image
         bboxes = [detection['bbox'] for detection in im_info['detections']]
         labels = [detection['label'] for detection in im_info['detections']]
@@ -148,14 +150,19 @@ class VOCDataset(Dataset):
         labels = torch.as_tensor(transformed_info['labels'])
         difficult = torch.as_tensor(difficult)
 
-        # Convert image to tensor and normalize
-        im_tensor = torch.from_numpy(im / 255.).permute((2, 0, 1)).float()
-        im_tensor_channel_0 = (torch.unsqueeze(im_tensor[0], 0) - 0.485) / 0.229
-        im_tensor_channel_1 = (torch.unsqueeze(im_tensor[1], 0) - 0.456) / 0.224
-        im_tensor_channel_2 = (torch.unsqueeze(im_tensor[2], 0) - 0.406) / 0.225
-        im_tensor = torch.cat((im_tensor_channel_0,
+        if self.im_channels == 3:
+            # Convert image to tensor and normalize
+            im_tensor = torch.from_numpy(im / 255.).permute((2, 0, 1)).float()
+            im_tensor_channel_0 = (torch.unsqueeze(im_tensor[0], 0) - 0.485) / 0.229
+            im_tensor_channel_1 = (torch.unsqueeze(im_tensor[1], 0) - 0.456) / 0.224
+            im_tensor_channel_2 = (torch.unsqueeze(im_tensor[2], 0) - 0.406) / 0.225
+            im_tensor = torch.cat((im_tensor_channel_0,
                                im_tensor_channel_1,
                                im_tensor_channel_2), 0)
+        else:
+            im_tensor = torch.tensor(torch.from_numpy(im / 255.).float())
+            im_tensor = im_tensor.unsqueeze(0)
+
         bboxes_tensor = torch.as_tensor(bboxes)
         labels_tensor = torch.as_tensor(labels)
 

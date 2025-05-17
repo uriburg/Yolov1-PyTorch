@@ -2,8 +2,8 @@ dataset_params:
   train_im_sets: ['data\\VOC2007', 'data\\VOC2012']
   test_im_sets: ['data\\VOC2007-test']
   num_classes : 3
-  im_size : 112
-  labels: ['person', 'dog', 'cat']
+  im_size : 88
+  labels: ['person', 'chair', 'car']
   #['person', 'bird', 'cat', 'cow', 'dog', 'horse', 'sheep',
   #          'aeroplane', 'bicycle', 'boat', 'bus', 'car', 'motorbike', 'train',
   #          'bottle', 'chair', 'diningtable', 'pottedplant', 'sofa', 'tvmonitor']
@@ -16,18 +16,19 @@ model_params:
   leaky_relu_slope : 0.1
   fc_dim : 4096
   fc_dropout : 0.5
-  S : 7
+  S : 4
   B : 2
   use_sigmoid : True
-  use_conv : True
+  use_conv : False
+  shrink: 4
 
 train_params:
   task_name: 'voc'
   seed: 1111
   acc_steps: 1 # increase if you want to get gradients from >1 steps(kind of mimicking >1 batch size)
   log_steps: 100
-  num_epochs: 135
-  batch_size: 256
+  num_epochs: 100
+  batch_size: 64
   lr_steps: [ 50, 75, 100, 125 ]
   lr: 0.001
   infer_conf_threshold : 0.2

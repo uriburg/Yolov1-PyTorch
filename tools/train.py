@@ -18,6 +18,16 @@ if torch.backends.mps.is_available():
     print('Using mps')
 
 
+def params_print(model):
+    total_params = 0
+    for name, param in model.named_parameters():
+        num_params = param.numel()
+        total_params += num_params
+        print(f"{name}: {num_params} parameters")
+
+    print(f"\nTotal parameters: {total_params}")
+
+
 def collate_function(data):
     return list(zip(*data))
 
@@ -45,16 +55,17 @@ def train(args):
 
     voc = VOCDataset(split='train', im_sets=dataset_config['train_im_sets'], labels=dataset_config['labels'],
                      im_size=dataset_config['im_size'], S=model_config['S'], B=model_config['B'],
-                     C=dataset_config['num_classes'])
+                     C=dataset_config['num_classes'], im_channels=model_config['im_channels'])
 
     train_dataset = DataLoader(voc,
                                batch_size=train_config['batch_size'],
                                shuffle=True,
                                collate_fn=collate_function)
 
-    yolo_model = YOLOV1(im_size=dataset_config['im_size'],
-                        num_classes=dataset_config['num_classes'],
-                        B=model_config['B'], S=model_config['S'])
+    yolo_model = YOLOV1(im_size=dataset_config['im_size'], num_classes=dataset_config['num_classes'],
+                        B=model_config['B'], S=model_config['S'], im_channels=model_config['im_channels'],
+                        use_conv=model_config['use_conv'], shrink_network=model_config['shrink'])
+    params_print(yolo_model)
     yolo_model.train()
     yolo_model.to(device)
     if os.path.exists(os.path.join(train_config['task_name'],
