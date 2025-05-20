@@ -3,7 +3,6 @@ import datetime, argparse, yaml, os
 from models.yolo import YOLOV1
 from dataset.voc import VOCDataset
 from torch.utils.data import DataLoader, random_split
-#from torch.utils.data.dataloader import DataLoader, random_split
 from loss.yolov1_loss import YOLOV1Loss
 from tqdm import tqdm
 
@@ -86,7 +85,7 @@ def training_loop(n_epochs, optimizer, scheduler, model, loss_fn, dataset, save_
         model.eval()
         loss_validation = validation_epoch(val_loader, device, use_sigmoid, model, loss_fn) / len(val_loader)
         if epoch % 3 == 0:
-            print(f'{datetime.datetime.now()} Epoch {epoch}, Training loss {loss_train}, Validation loss {loss_validation}')
+            print(f'{datetime.datetime.now().strftime("%H:%M:%S")} Epoch {epoch}, Training loss {loss_train:.3f}, Validation loss {loss_validation:.3f}')
         if loss_validation < best_vloss:
             torch.save(model.state_dict(), save_path)
             best_vloss = loss_validation
