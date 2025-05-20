@@ -3,6 +3,8 @@ dataset_params:
   test_im_sets: ['data\\VOC2007-test']
   num_classes : 3
   im_size : 88
+  num_workers: 2
+  load_to_memory: True
   labels: ['person', 'chair', 'car']
   #['person', 'bird', 'cat', 'cow', 'dog', 'horse', 'sheep',
   #          'aeroplane', 'bicycle', 'boat', 'bus', 'car', 'motorbike', 'train',
@@ -20,17 +22,18 @@ model_params:
   B : 2
   use_sigmoid : True
   use_conv : False
-  shrink: 4
+  shrink: 1
 
 train_params:
   task_name: 'voc'
   seed: 1111
   acc_steps: 1 # increase if you want to get gradients from >1 steps(kind of mimicking >1 batch size)
-  log_steps: 100
-  num_epochs: 100
+  log_steps: 50
+  num_epochs: 1000
   batch_size: 64
   lr_steps: [ 50, 75, 100, 125 ]
-  lr: 0.001
+  lr: 0.0005
+  lr_min: 0.00000001
   infer_conf_threshold : 0.2
   eval_conf_threshold : 0.001
   nms_threshold : 0.5

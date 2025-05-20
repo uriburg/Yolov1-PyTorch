@@ -1,5 +1,4 @@
 import torch.nn as nn
-import torchvision
 
 
 class YOLOV1(nn.Module):
@@ -24,28 +23,47 @@ class YOLOV1(nn.Module):
         self.im_channels = im_channels
         self.output_dim = self.S * self.S * (self.B * 5 + self.C)
         self.use_conv = use_conv
-        self.backbone = nn.Sequential(Conv(self.im_channels, int(16 // shrink_network), 3, 1, 1, True),
+
+        self.backbone = nn.Sequential(Conv(self.im_channels, 16, 3, 1, 1, False),
                                       nn.MaxPool2d(2, 2, 0),
-                                      Conv(int(16 // shrink_network), int(16 // shrink_network), 3, 1, 1, True),
-                                      Conv(int(16 // shrink_network), int(16 // shrink_network), 3, 1, 1, True),
+                                      Conv(16, 16, 3, 1, 1, True),
+                                      Conv(16, 16, 3, 1, 1, True),
                                       nn.MaxPool2d(2, 2, 0),
-                                      Conv(int(16 // shrink_network), int(32 // shrink_network), 3, 1, 1, True),
-                                      Conv(int(32 // shrink_network), int(32 // shrink_network), 3, 1, 1, True),
+                                      Conv(16, 32, 3, 1, 1, True),
+                                      Conv(32, 32, 3, 1, 1, True),
                                       nn.MaxPool2d(2, 2, 0),
-                                      Conv(int(32 // shrink_network), int(64 // shrink_network), 3, 1, 1, True),
-                                      Conv(int(64 // shrink_network), int(64 // shrink_network), 3, 1, 1, True),
+                                      Conv(32, 64, 3, 1, 1, True),
+                                      Conv(64, 64, 3, 1, 1, True),
                                       nn.MaxPool2d(2, 2, 0),
-                                      Conv(int(64 // shrink_network), int(64 // shrink_network), 3, 1, 1, True),
-                                      Conv(int(64 // shrink_network), int(128 // shrink_network), 3, 1, 1, True),
+                                      Conv(64, 64, 3, 1, 1, True),
+                                      Conv(64, 128 , 3, 1, 1, True),
                                       nn.MaxPool2d(2, 2,0),
-                                      Conv(int(128 // shrink_network), int(128 // shrink_network), 3, 1, 1, True),)
+                                      Conv(128, 128, 3, 1, 1, True),
+                                      )
 
         if self.use_conv:
-            self.head = nn.Conv2d(int(128 // shrink_network), 5 * self.B + self.C, 1)
+            self.head = nn.Conv2d(128, 5 * self.B + self.C, 1)
         else:
-            self.head = nn.Sequential(nn.Flatten(),
-                                  nn.Linear(((im_size // (2 ** 5)) ** 2) * int(128 // shrink_network), self.output_dim),)
+            self.head = nn.Sequential(nn.Flatten(), nn.Linear(((im_size // (2 ** 5)) ** 2) * 128, self.output_dim))
 
+        # Another architecture need to be tested
+        # self.backbone = nn.Sequential(Conv(3, 64, 4, 2, 0, False),
+        #                           nn.MaxPool2d(2, 2, 0),
+        #                           Conv(64, 128, 3, 1, 0, True),
+        #                           Conv(128, 128, 3, 1, 1, True),
+        #                           Conv(128, 128, 3, 1, 0, True),
+        #                           nn.MaxPool2d(2, 2, 0),
+        #                           Conv(128, 128, 3, 1, 1, True),
+        #                           Conv(128, 64, 3, 1, 0, True),
+        #                           Conv(64, 64, 3, 1, 1, True),
+        #                           Conv(64, 64, 3, 1, 0, True),
+        #                           nn.MaxPool2d(2, 2, 0),
+        #                           )
+        #
+        # self.head = nn.Sequential(nn.Flatten(),
+        #                           nn.Linear(1024, 1024),
+        #                           nn.Linear(1024, self.output_dim),
+        #                           )
     def forward(self, x):
         out = self.backbone(x)
         out = self.head(out)
@@ -53,7 +71,6 @@ class YOLOV1(nn.Module):
             # Reshape conv output to Batch x S x S x (5B+C)
             out = out.permute(0, 2, 3, 1)
         out = out.view(-1, self.S, self.S, self.B * 5 + self.C)
-        #print(out.shape)
         return out
 
 
@@ -61,7 +78,7 @@ class Conv(nn.Module):
     """A block of Conv2D -> BatchNorm -> ReLU."""
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, depthwise=False):
         super(Conv, self).__init__()
-        if depthwise:
+        if not depthwise:
             self.conv = nn.Sequential(nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=False),
                                       nn.BatchNorm2d(out_channels),
                                       nn.ReLU(inplace=True),)

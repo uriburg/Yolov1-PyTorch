@@ -1,11 +1,10 @@
 import os
 import albumentations as albu
-import cv2
 import torch
 from torch.utils.data.dataset import Dataset
 import xml.etree.ElementTree as ET
-
-
+from PIL import Image
+import numpy as np
 def load_images_and_anns(im_sets, label2idx, ann_fname, split):
     r"""
     Method to get the xml files and for each file
@@ -79,7 +78,7 @@ def load_images_and_anns(im_sets, label2idx, ann_fname, split):
 
 
 class VOCDataset(Dataset):
-    def __init__(self, split, im_sets, labels, im_size=448, S=7, B=2, C=20, im_channels=3):
+    def __init__(self, split, im_sets, labels, im_size=448, S=7, B=2, C=20, im_channels=3, load_to_memory=False):
         self.split = split
         # Imagesets for this dataset instance (VOC2007/VOC2007+VOC2012/VOC2007-test)
         self.im_sets = im_sets
@@ -89,24 +88,25 @@ class VOCDataset(Dataset):
         self.S = S
         self.B = B
         self.C = C
+        self.load_to_memory = load_to_memory
         self.im_channels = im_channels
         # Train and test transformations
         self.transforms = {
             'train': albu.Compose([
-                albu.HorizontalFlip(p=0.5),
-                albu.Affine(
-                    scale=(0.8, 1.2),
-                    translate_percent=(-0.2, 0.2),
-                    always_apply=True
-                ),
-                albu.ColorJitter(
-                    brightness=(0.8, 1.2),
-                    contrast=(0.8, 1.2),
-                    saturation=(0.8, 1.2),
-                    hue=(-0.2, 0.2),
-                    always_apply=None,
-                    p=0.5,
-                ),
+                #albu.HorizontalFlip(p=0.5),
+                #albu.Affine(
+                #    scale=(0.8, 1.2),
+                #    translate_percent=(-0.2, 0.2),
+                #    always_apply=True
+                #),
+                #albu.ColorJitter(
+                #    brightness=(0.8, 1.2),
+                #    contrast=(0.8, 1.2),
+                #    saturation=(0.8, 1.2),
+                #    hue=(-0.2, 0.2),
+                #    always_apply=None,
+                #    p=0.5,
+                #),
                 albu.Resize(self.im_size, self.im_size)],
                 bbox_params=albu.BboxParams(format='pascal_voc',
                                             label_fields=['labels'])),
@@ -125,17 +125,23 @@ class VOCDataset(Dataset):
                                                 self.label2idx,
                                                 self.fname,
                                                 self.split)
-    
-    def __len__(self):
-        return len(self.images_info)
-    
-    def __getitem__(self, index):
+        if self.load_to_memory:
+            self.image_data = []
+
+            for index, item in enumerate(self.images_info):
+                self.image_data.append(self.load_image_to_memory(index))
+
+        #    self.image_data[item['filename']] = np.asarray(Image.open(item['filename']))
+
+    def load_image_to_memory(self, index):
         im_info = self.images_info[index]
-        im = cv2.imread(im_info['filename'])
-        if self.im_channels == 1:
-            im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-        else:
-            im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        im = np.asarray(Image.open(im_info['filename']))
+        # im = self.image_data[im_info['filename']].copy()
+        # im = cv2.imread(im_info['filename'])
+        # if self.im_channels == 1:
+        #    im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        # else:
+        #    im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
         # Get annotations for this image
         bboxes = [detection['bbox'] for detection in im_info['detections']]
         labels = [detection['label'] for detection in im_info['detections']]
@@ -157,8 +163,8 @@ class VOCDataset(Dataset):
             im_tensor_channel_1 = (torch.unsqueeze(im_tensor[1], 0) - 0.456) / 0.224
             im_tensor_channel_2 = (torch.unsqueeze(im_tensor[2], 0) - 0.406) / 0.225
             im_tensor = torch.cat((im_tensor_channel_0,
-                               im_tensor_channel_1,
-                               im_tensor_channel_2), 0)
+                                   im_tensor_channel_1,
+                                   im_tensor_channel_2), 0)
         else:
             im_tensor = torch.tensor(torch.from_numpy(im / 255.).float())
             im_tensor = im_tensor.unsqueeze(0)
@@ -186,8 +192,8 @@ class VOCDataset(Dataset):
             box_j = torch.floor(box_center_y / cell_pixels).long()
 
             # xc offset from cell topleft
-            box_xc_cell_offset = (box_center_x - box_i*cell_pixels) / cell_pixels
-            box_yc_cell_offset = (box_center_y - box_j*cell_pixels) / cell_pixels
+            box_xc_cell_offset = (box_center_x - box_i * cell_pixels) / cell_pixels
+            box_yc_cell_offset = (box_center_y - box_j * cell_pixels) / cell_pixels
 
             # w, h targets normalized to 0-1
             box_w_label = box_widths / w
@@ -199,11 +205,15 @@ class VOCDataset(Dataset):
                 for k in range(self.B):
                     s = 5 * k
                     # target_ij = [xc_offset,yc_offset,sqrt(w),sqrt(h), conf, cls_label]
+                    # try:
                     yolo_targets[box_j[idx], box_i[idx], s] = box_xc_cell_offset[idx]
-                    yolo_targets[box_j[idx], box_i[idx], s+1] = box_yc_cell_offset[idx]
-                    yolo_targets[box_j[idx], box_i[idx], s+2] = box_w_label[idx].sqrt()
-                    yolo_targets[box_j[idx], box_i[idx], s+3] = box_h_label[idx].sqrt()
-                    yolo_targets[box_j[idx], box_i[idx], s+4] = 1.0
+                    yolo_targets[box_j[idx], box_i[idx], s + 1] = box_yc_cell_offset[idx]
+                    yolo_targets[box_j[idx], box_i[idx], s + 2] = box_w_label[idx].sqrt()
+                    yolo_targets[box_j[idx], box_i[idx], s + 3] = box_h_label[idx].sqrt()
+                    yolo_targets[box_j[idx], box_i[idx], s + 4] = 1.0
+                    # except Exception as e:
+                    #    print(e)
+                    #    exit()
                 label = int(labels[b])
                 cls_target = torch.zeros((self.C,))
                 cls_target[label] = 1.
@@ -221,3 +231,18 @@ class VOCDataset(Dataset):
             'difficult': difficult,
         }
         return im_tensor, targets, im_info['filename']
+
+
+    def __len__(self):
+        return len(self.images_info)
+    
+    def __getitem__(self, index):
+        if self.load_to_memory:
+            #if self.split == 'train':
+            #    im_tensor, targets, im_info = self.image_data[index]
+            #    yolo_targets = torch.cat([target['yolo_targets'].unsqueeze(0).float().to(device) for target in targets], dim=0)
+            #    im = torch.cat([im.unsqueeze(0).float().to(device) for im in ims], dim=0)
+
+            return self.image_data[index]
+        else:
+            return self.load_image_to_memory(index)
